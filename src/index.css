@@ -1,0 +1,150 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: 'PingFang SC', 'Microsoft YaHei', "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --glass: rgba(255, 255, 255, 0.15);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --accent: #ff7e5f;
+  --success: #43e97b;
+}
+
+body {
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  min-height: 100vh;
+  background-attachment: fixed;
+}
+
+/* Typography overrides for dark background */
+.prose {
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
+  --tw-prose-lead: var(--text-secondary);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bold: var(--text-primary);
+  --tw-prose-counters: var(--text-secondary);
+  --tw-prose-bullets: var(--text-secondary);
+  --tw-prose-hr: var(--glass-border);
+  --tw-prose-quotes: var(--text-primary);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-captions: var(--text-secondary);
+  --tw-prose-code: var(--text-primary);
+  --tw-prose-pre-code: var(--text-primary);
+  --tw-prose-pre-bg: rgba(0, 0, 0, 0.2);
+  --tw-prose-th-borders: var(--glass-border);
+  --tw-prose-td-borders: var(--glass-border);
+}
+
+.glass-panel {
+  background: var(--glass);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+}
+
+.glass-header {
+  background: var(--glass);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+.glass-card {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+}
+
+.glass-btn-primary {
+  background: var(--text-primary);
+  color: #764ba2;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.glass-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.glass-btn-outline {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.glass-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.glass-tag {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  border-radius: 4px;
+}
+
+.glass-badge {
+  background: var(--accent);
+  color: white;
+  border-radius: 10px;
+}
+
+.analysis-box {
+  background: rgba(255, 126, 95, 0.15);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px 12px 12px 4px;
+}
+
+.explanation-box {
+  background: rgba(67, 233, 123, 0.15);
+  border-left: 4px solid var(--success);
+  border-radius: 4px 12px 12px 4px;
+}
+
+/* Custom scrollbar for inner areas */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .prose {
+    --tw-prose-body: black;
+    --tw-prose-headings: black;
+  }
+}

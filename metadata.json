@@ -1,0 +1,6 @@
+{
+  "name": "错题本 - 智能举一反三",
+  "description": "一款全科通用的错题学习工具，支持拍照识别错题，基于知识点智能生成举一反三题目，并提供历史错题本与PDF打印功能。每个举一反三题目都附带解析，且解析侧重易错点分析。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
