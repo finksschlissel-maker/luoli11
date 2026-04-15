@@ -4,7 +4,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const analyzeMistakeImage = async (base64Data: string, mimeType: string) => {
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-3.1-flash-preview',
     contents: [
       {
         inlineData: {
@@ -12,7 +12,11 @@ export const analyzeMistakeImage = async (base64Data: string, mimeType: string) 
           mimeType: mimeType,
         },
       },
-      '请分析这张图片中的题目。提取出题目的完整文本、所属学科（如数学、物理、英语等），以及该题目考察的核心知识点（1-3个）。',
+      `请作为一名专业的小学教师，仔细分析这张图片中的题目。
+要求：
+1. 【高精度提取】提取出题目的完整文本。如果包含数学公式或算式，请务必使用标准的 LaTeX 格式（例如 $1+1=2$ 或 $$x=y$$）。请忽略图片中与题目无关的背景文字、涂鸦或水印。
+2. 【学科识别】指出所属学科（如：小学三年级数学、小学三年级语文等）。
+3. 【知识点归纳】精准提炼该题目考察的核心知识点（1-3个），知识点需符合小学三年级学生的教学大纲。`,
     ],
     config: {
       responseMimeType: 'application/json',

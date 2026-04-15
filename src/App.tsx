@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Camera, BookOpen, Printer, Plus, ChevronLeft, Trash2, Loader2, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Camera, BookOpen, Printer, Plus, ChevronLeft, Trash2, Loader2, RefreshCw, Mic, Square, Volume2 } from 'lucide-react';
 import { Mistake, GeneratedQuestion, ChatMessage } from './types';
 import { getMistakes, saveMistake, deleteMistake, updateMistake } from './lib/store';
 import { analyzeMistakeImage, generateSimilarQuestions, chatWithSocraticTutor } from './lib/gemini';
@@ -24,9 +24,94 @@ export default function App() {
   const [chatInputs, setChatInputs] = useState<Record<string, string>>({});
   const [chatLoading, setChatLoading] = useState<Record<string, boolean>>({});
 
+  // Voice states
+  const [isRecording, setIsRecording] = useState<Record<string, boolean>>({});
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
   useEffect(() => {
     setMistakes(getMistakes());
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      window.speechSynthesis.cancel();
+    };
   }, []);
+
+  const toggleRecording = (questionId: string) => {
+    if (isRecording[questionId]) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(prev => ({ ...prev, [questionId]: false }));
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('您的浏览器不支持语音识别，请使用 Chrome、Edge 或 Safari 浏览器。');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    let finalTranscript = chatInputs[questionId] || '';
+
+    recognition.onstart = () => {
+      setIsRecording(prev => ({ ...prev, [questionId]: true }));
+    };
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setChatInputs(prev => ({ ...prev, [questionId]: finalTranscript + interimTranscript }));
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error', event.error);
+      setIsRecording(prev => ({ ...prev, [questionId]: false }));
+    };
+
+    recognition.onend = () => {
+      setIsRecording(prev => ({ ...prev, [questionId]: false }));
+    };
+
+    recognition.start();
+  };
+
+  const toggleSpeech = (text: string, msgId: string) => {
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    
+    // Strip markdown for speech
+    const plainText = text.replace(/[*_#`]/g, '').replace(/\[.*?\]\(.*?\)/g, '');
+    
+    const utterance = new SpeechSynthesisUtterance(plainText);
+    utterance.lang = 'zh-CN';
+    utterance.rate = 0.9; // Slightly slower for kids
+    
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+    
+    window.speechSynthesis.speak(utterance);
+    setSpeakingMsgId(msgId);
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -110,6 +195,20 @@ export default function App() {
     }
   };
 
+  const handleAddGeneratedToNotebook = (mistake: Mistake, q: GeneratedQuestion) => {
+    const newMistake: Mistake = {
+      id: Date.now().toString(),
+      createdAt: Date.now(),
+      originalText: q.text,
+      subject: mistake.subject,
+      knowledgePoints: mistake.knowledgePoints,
+      generatedQuestions: [],
+    };
+    saveMistake(newMistake);
+    setMistakes(getMistakes());
+    alert('已将该题作为新错题加入错题本！');
+  };
+
   const handleStartChat = async (mistake: Mistake, questionId: string) => {
     const qIndex = mistake.generatedQuestions.findIndex(q => q.id === questionId);
     if (qIndex === -1) return;
@@ -131,11 +230,18 @@ export default function App() {
     updateMistake(updatedMistake);
     setMistakes(getMistakes());
     setSelectedMistake(updatedMistake);
+    
+    // Auto-play the initial message
+    toggleSpeech(initialMessage.content, `${questionId}-0`);
   };
 
   const handleSendMessage = async (mistake: Mistake, questionId: string) => {
     const userText = chatInputs[questionId]?.trim();
     if (!userText) return;
+
+    // Stop speaking if user sends a message
+    window.speechSynthesis.cancel();
+    setSpeakingMsgId(null);
 
     const qIndex = mistake.generatedQuestions.findIndex(q => q.id === questionId);
     if (qIndex === -1) return;
@@ -157,6 +263,12 @@ export default function App() {
     setChatInputs(prev => ({ ...prev, [questionId]: '' }));
     setChatLoading(prev => ({ ...prev, [questionId]: true }));
 
+    // Stop recording if active
+    if (isRecording[questionId] && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(prev => ({ ...prev, [questionId]: false }));
+    }
+
     setTimeout(() => {
       const container = document.getElementById(`chat-container-${questionId}`);
       if (container) container.scrollTop = container.scrollHeight;
@@ -171,16 +283,20 @@ export default function App() {
       );
 
       const newModelMsg: ChatMessage = { role: 'model', content: aiResponseText };
+      const newHistory = [...(updatedMistake.generatedQuestions[qIndex].chatHistory || []), newModelMsg];
       
       updatedMistake = { ...updatedMistake };
       updatedMistake.generatedQuestions[qIndex] = {
         ...updatedMistake.generatedQuestions[qIndex],
-        chatHistory: [...(updatedMistake.generatedQuestions[qIndex].chatHistory || []), newModelMsg]
+        chatHistory: newHistory
       };
       
       updateMistake(updatedMistake);
       setMistakes(getMistakes());
       setSelectedMistake(updatedMistake);
+
+      // Auto-play the AI response
+      toggleSpeech(aiResponseText, `${questionId}-${newHistory.length - 1}`);
 
       setTimeout(() => {
         const container = document.getElementById(`chat-container-${questionId}`);
@@ -360,7 +476,7 @@ export default function App() {
                         <MarkdownRenderer content={q.text} />
                       </div>
 
-                      <div className="flex gap-3 mt-4">
+                      <div className="flex flex-wrap gap-3 mt-4">
                         <button 
                           onClick={() => setActiveTabs(prev => ({ ...prev, [q.id]: prev[q.id] === 'explanation' ? 'none' : 'explanation' }))}
                           className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTabs[q.id] === 'explanation' ? 'glass-btn-primary' : 'glass-btn-outline'}`}
@@ -377,6 +493,14 @@ export default function App() {
                           className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTabs[q.id] === 'chat' ? 'bg-[#ff7e5f] text-white border-transparent' : 'glass-btn-outline border-[#ff7e5f] text-[#ff7e5f]'}`}
                         >
                           我做错了，求助老师
+                        </button>
+                        <button 
+                          onClick={() => handleAddGeneratedToNotebook(selectedMistake, q)}
+                          className="px-4 py-2 rounded-xl text-sm font-medium transition-colors glass-btn-outline flex items-center gap-1 hover:bg-white/10"
+                          title="将此题作为新错题加入错题本"
+                        >
+                          <Plus size={16} />
+                          加入错题本
                         </button>
                       </div>
                       
@@ -403,8 +527,17 @@ export default function App() {
                           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 mb-4 pr-2" id={`chat-container-${q.id}`}>
                             {q.chatHistory?.map((msg, i) => (
                               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] p-3 rounded-2xl text-[13px] leading-relaxed ${msg.role === 'user' ? 'bg-[#ff7e5f] text-white rounded-tr-sm' : 'glass-panel text-white/90 rounded-tl-sm'}`}>
+                                <div className={`max-w-[85%] p-3 rounded-2xl text-[13px] leading-relaxed relative group ${msg.role === 'user' ? 'bg-[#ff7e5f] text-white rounded-tr-sm' : 'glass-panel text-white/90 rounded-tl-sm'}`}>
                                   <MarkdownRenderer content={msg.content} />
+                                  {msg.role === 'model' && (
+                                    <button 
+                                      onClick={() => toggleSpeech(msg.content, `${q.id}-${i}`)}
+                                      className={`absolute -right-8 top-2 p-1.5 rounded-full transition-opacity ${speakingMsgId === `${q.id}-${i}` ? 'bg-[#43e97b]/20 text-[#43e97b] opacity-100' : 'text-white/40 hover:text-white/80 opacity-0 group-hover:opacity-100'}`}
+                                      title={speakingMsgId === `${q.id}-${i}` ? "停止朗读" : "朗读"}
+                                    >
+                                      {speakingMsgId === `${q.id}-${i}` ? <Square size={14} className="fill-current" /> : <Volume2 size={14} />}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -416,13 +549,20 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-2 shrink-0">
+                          <div className="flex gap-2 shrink-0 items-center">
+                            <button
+                              onClick={() => toggleRecording(q.id)}
+                              className={`p-2.5 rounded-xl transition-colors ${isRecording[q.id] ? 'bg-red-500/20 text-red-400 animate-pulse' : 'glass-btn-outline text-white/70 hover:text-white'}`}
+                              title={isRecording[q.id] ? "停止录音" : "语音输入"}
+                            >
+                              {isRecording[q.id] ? <Square size={18} className="fill-current" /> : <Mic size={18} />}
+                            </button>
                             <input 
                               type="text" 
                               value={chatInputs[q.id] || ''}
                               onChange={e => setChatInputs(prev => ({ ...prev, [q.id]: e.target.value }))}
                               onKeyDown={e => e.key === 'Enter' && handleSendMessage(selectedMistake, q.id)}
-                              placeholder="告诉老师你哪里不会..."
+                              placeholder={isRecording[q.id] ? "正在聆听..." : "告诉老师你哪里不会..."}
                               className="flex-1 bg-black/20 border border-white/20 rounded-xl px-4 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#ff7e5f] transition-colors"
                             />
                             <button 
